@@ -22,8 +22,8 @@
 #include <ArduinoOTA.h>
 
 #ifndef STASSID
-#define STASSID "YOUR_SSID"   // OPCION: El nombre de tu WiFi para poder usar OTA
-#define STAPSK  "YOUR_PASSWD" // OPCION: La password de tu WiFi para poder usar OTA
+#define STASSID "HOME_SWEET_HOME"   // OPCION: El nombre de tu WiFi para poder usar OTA
+#define STAPSK  "M4ndr4k312345"     // OPCION: La password de tu WiFi para poder usar OTA
 #endif
 
 const char* ssid = STASSID;     // ¡¡¡NO TOCAR!!!
@@ -32,9 +32,10 @@ const char* password = STAPSK;  // ¡¡¡NO TOCAR!!!
 #define NUM_LEDS 30           // OPCION: El número de píxeles que tiene cada tira
 #define NUM_STRIPS 5          // OPCION: El número de tiras que hay en total (anotar los pins de control más abajo)
 #define NUM_COLORS 5          // OPCION: Número total de colores a usar para el efecto de la lluvia (incluye negro)
-#define MIN_WAIT_TIME 1000    // OPCION: Tiempo mínimo de espera (en ms)
-#define MAX_WAIT_TIME 5000    // OPCION: Tiempo máximo de espera (en ms)
-#define MIN_RAIN_SPEED 3      // OPCION: Velocidad mínima de la lluvia (en LED/seg)
+#define NUM_SETS 4            // OPCION: Número de combinaciones de colores entre los que elegir
+#define MIN_WAIT_TIME 200     // OPCION: Tiempo mínimo de espera (en ms)
+#define MAX_WAIT_TIME 1000    // OPCION: Tiempo máximo de espera (en ms)
+#define MIN_RAIN_SPEED 5      // OPCION: Velocidad mínima de la lluvia (en LED/seg)
 #define MAX_RAIN_SPEED 10     // OPCION: Velocidad máxima de la lluvia (en LED/seg)
 
 #define STRIP_1_PIN 4         // OPCION: El pin de cada tira (modifica el setup() para que coincida con el número de tiras) (D2)
@@ -46,18 +47,42 @@ const char* password = STAPSK;  // ¡¡¡NO TOCAR!!!
 /**** VARIABLES GLOBALES PARA CONTROLAR EL EFECTO ****/
 uint8_t currentLed[NUM_STRIPS];       // Controla en que LED está el punto más luminoso
 uint8_t rainSpeed[NUM_STRIPS];        // Controla la velocidad a la que irá la lluvia
+uint8_t colorSet[NUM_STRIPS];         // Controla el set de colores para cada tira
 long waitTime[NUM_STRIPS];            // Controla cuánto se debe esperar para redibujar
 long initialTime[NUM_STRIPS];         // Controla desde cuándo se debe contar el tiempo de espera
 bool isRaining[NUM_STRIPS];           // Controla cuándo ha acabado la caída de la gota
 
 CRGB ledColors[NUM_STRIPS][NUM_LEDS]; // El color que debe mostrar cada LED en una matriz bidimensional (tabla)
 
-CRGB rainColors[NUM_COLORS] = {       // OPCION: Colores para el efecto, de más a menos luminoso (incluye apagado) ¡CAMBIAR NUM_COLORS arriba!
-  CRGB(40, 40, 150),
-  CRGB(20, 20, 75),
-  CRGB(2, 2, 10),
-  CRGB(0, 0, 1),
-  CRGB::Black
+CRGB rainColors[NUM_SETS][NUM_COLORS] = {       // OPCION: Colores para el efecto, de más a menos luminoso (incluye apagado) ¡CAMBIAR NUM_COLORS arriba!
+  {                                             // Color azul
+    CRGB(40, 40, 150),
+    CRGB(20, 20, 75),
+    CRGB(2, 2, 10),
+    CRGB(0, 0, 1),
+    CRGB::Black
+  },
+  {                                             // Color verde
+    CRGB(15, 70, 15),
+    CRGB(7, 50, 7),
+    CRGB(1, 6, 1),
+    CRGB(0, 1, 0),
+    CRGB::Black
+  },
+  {                                             // Color naranja
+    CRGB(150, 35, 0),
+    CRGB(75, 15, 0),
+    CRGB(10, 2, 0),
+    CRGB(6, 1, 0),
+    CRGB::Black
+  },
+  {                                             // Color amarillo
+    CRGB(150, 70, 0),
+    CRGB(75, 37, 0),
+    CRGB(10, 5, 0),
+    CRGB(6, 3, 0),
+    CRGB::Black
+  }
 };
 
 long currentTime;                     // El tiempo medido al inicio del loop()
@@ -148,18 +173,18 @@ void setup() {
  ************************************************************/
 
 void prepareStrip(uint8_t strip){
-  if (currentTime - initialTime[strip] >= waitTime[strip]){           // Si ya ha pasado el tiempo de espera
-    waitTime[strip] = 1000 / rainSpeed[strip];                          // Recalculamos el tiempo de espera según la velocidad
-    initialTime[strip] = currentTime;                                   // El nuevo punto de inicio de espera
-    for (int i = 0; i < NUM_COLORS; i++){                               // Bucle para cada color del efecto
-      if (currentLed[strip] - i < 0) break;                               // Si estamos al principio desechamos la cola saliendo del bucle
-      if (currentLed[strip] - i < NUM_LEDS){                              // Si estamos al final los puntos más lumnisos no se pintan
-        ledColors[strip][currentLed[strip] - i] = rainColors[i];            // Pintamos el LED
+  if (currentTime - initialTime[strip] >= waitTime[strip]){                     // Si ya ha pasado el tiempo de espera
+    waitTime[strip] = 1000 / rainSpeed[strip];                                    // Recalculamos el tiempo de espera según la velocidad
+    initialTime[strip] = currentTime;                                             // El nuevo punto de inicio de espera
+    for (int i = 0; i < NUM_COLORS; i++){                                         // Bucle para cada color del efecto
+      if (currentLed[strip] - i < 0) break;                                        // Si estamos al principio desechamos la cola saliendo del bucle
+      if (currentLed[strip] - i < NUM_LEDS){                                        // Si estamos al final los puntos más lumnisos no se pintan
+        ledColors[strip][currentLed[strip] - i] = rainColors[colorSet[strip]][i];   // Pintamos el LED
       }
     }
-    currentLed[strip]++;                                              // Avanzamos la posición del inicio de la gota
-    if (currentLed[strip] >= NUM_LEDS + NUM_COLORS - 1){              // Si ya ha acabado
-      isRaining[strip] = false;                                         // Ya no está lloviendo y se deberá resetear con nueva velocidad
+    currentLed[strip]++;                                                          // Avanzamos la posición del inicio de la gota
+    if (currentLed[strip] >= NUM_LEDS + NUM_COLORS - 1){                          // Si ya ha acabado
+      isRaining[strip] = false;                                                     // Ya no está lloviendo y se deberá resetear con nueva velocidad
     }
   }
 }
@@ -178,6 +203,7 @@ void loop() {
       currentLed[i] = 0;                                            // Reseteamos la posición de la gota
       waitTime[i] = random(MIN_WAIT_TIME, MAX_WAIT_TIME);           // Calculamos un tiempo de espera inicial aleatorio
       rainSpeed[i] = random(MIN_RAIN_SPEED, MAX_RAIN_SPEED);        // Calculamos una velocidad aleatoria
+      colorSet[i] = random(0, NUM_SETS);                            // Calculamos un set de colores aleatorio
       isRaining[i] = true;                                          // Indicamos que está lloviendo en esta tira
     }
     prepareStrip(i);                                             // Llamamos a la función para dibujar la tira
